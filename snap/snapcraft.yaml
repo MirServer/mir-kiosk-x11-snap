@@ -20,15 +20,25 @@ parts:
       sudo apt install --assume-yes libmiral-dev
       snapcraftctl pull
 
+  recipe-version:
+    plugin: nil
+    source: .
+    source-type: git
+    override-build: |
+      git rev-list --count HEAD > $SNAPCRAFT_PART_INSTALL/recipe-version
+    prime:
+      - -recipe-version
+
   mir-kiosk-x11:
-    after: [ppa-setup]
+    after: [recipe-version, ppa-setup]
     plugin: cmake
-    source: https://github.com/MirServer/mir_kiosk_x11.git
+    source: src
     override-pull: |
       snapcraftctl pull
-      server_version=`git rev-list --count HEAD`
-      mir_version=`LANG=C apt-cache policy libmircommon-dev | sed -rne 's/^\s+Candidate:\s+([^-]*)-.+$/\1/p'`
-      snapcraftctl set-version $server_version-mir$mir_version
+      mir_version=`LANG=C apt-cache policy mir-platform-graphics-wayland | sed -rne 's/^\s+Candidate:\s+([^-]*)-.+$/\1/p'`
+      recipe_version=`cat $SNAPCRAFT_STAGE/recipe-version`
+      snapcraftctl set-version $recipe_version-mir$mir_version
+      if echo $mir_version | grep -e '+dev' -e '~rc' -q; then snapcraftctl set-grade devel; else snapcraftctl set-grade stable; fi
     build-packages:
       - pkg-config
       - libmiral-dev
@@ -37,8 +47,7 @@ parts:
     stage-packages:
       - inotify-tools
       - libmiral4
-      - try: [mir-platform-graphics-wayland]  # Mir 2.2+
-      - else: [mir-platform-graphics-wayland18] # Mir < 2.2
+      - mir-platform-graphics-wayland
       - dmz-cursor-theme
       - fonts-freefont-ttf
       - xwayland
@@ -50,20 +59,3 @@ parts:
     override-build: |
       snapcraftctl build
       sed s/\$\{SNAPCRAFT_ARCH_TRIPLET}/${SNAPCRAFT_ARCH_TRIPLET}/g --in-place $SNAPCRAFT_PART_INSTALL/hacks/*
-
-layout:
-  /usr/share/X11:
-    bind: $SNAP/usr/share/X11
-  /usr/bin/xkbcomp:
-    symlink: $SNAP/usr/bin/xkbcomp
-  /usr/share/icons:
-    bind: $SNAP/usr/share/icons
-  /usr/share/fonts:
-    bind: $SNAP/usr/share/fonts
-  /etc/fonts:
-    bind: $SNAP/etc/fonts
-
-plugs:
-  opengl:         # For Mir
-  wayland:        # For Mir
-  network-bind:   # For Mir (to serve X11)
